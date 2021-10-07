@@ -58,7 +58,7 @@ In order to apply the concepts seen in the course and to have a practical point 
 ### Built With
 
 * [Python 3.9](https://www.python.org/)
-* [PyQt5](https://wiki.python.org/moin/PyQt)
+* [PySide6](https://pypi.org/project/PySide6/)
 
 
 <!-- GETTING STARTED -->
