@@ -5,7 +5,7 @@
 <h3 align="center">Colors clustering</h3>
 
   <p align="center">
-    A colors clustering Python application built with Qt.
+    A Python colors clustering application built with Qt.
     <br />
     <a href="https://github.com/killian-mahe/colors-clustering"><strong>Explore the docs »</strong></a>
     <br />
