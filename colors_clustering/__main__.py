@@ -1,7 +1,11 @@
-from GUI import MainWindow
+"""
+Main application program.
+"""
+import sys
+
 from PySide6.QtWidgets import QApplication
 
-import sys
+from colors_clustering.gui import MainWindow
 
 
 if __name__ == "__main__":

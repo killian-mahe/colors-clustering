@@ -93,7 +93,7 @@ Before clonning the repository, you should create a new virtual environment (usi
 
 1. Start the project
     ```sh
-    python colors-clustering
+    python colors_clustering
     ```
 
 <!-- ROADMAP -->
