@@ -10,4 +10,4 @@ RUN . /opt/venv/bin/activate && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "colors-clustering"]
+CMD ["python", "colors_clustering"]

@@ -20,4 +20,4 @@ jobs:
     - name: Analysing the code with pylint
       run: |
         cd colors-clustering
-        pylint `ls -R|grep .py$|xargs`
+        pylint colors_clustering
