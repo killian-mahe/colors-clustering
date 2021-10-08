@@ -1,3 +1,2 @@
-[Master]
-
-extension-pkg-allow-list=PySide6
+[MASTER]
+extension-pkg-whitelist=PySide6
