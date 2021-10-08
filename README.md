@@ -1,7 +1,8 @@
+[![Docker Image CI](https://github.com/killian-mahe/colors-clustering/actions/workflows/docker-image.yml/badge.svg?branch=main)](https://github.com/killian-mahe/colors-clustering/actions/workflows/docker-image.yml)
 <!-- PROJECT LOG -->
 <br />
 <p align="center">
-
+  
 <h3 align="center">Colors clustering</h3>
 
   <p align="center">
