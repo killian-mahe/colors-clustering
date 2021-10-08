@@ -21,4 +21,4 @@ jobs:
     - name: Analysing the code with pylint
       run: |
         ls
-        pylint colors_clustering
+        pylint --extension-pkg-allow-list=PySide6 colors_clustering
