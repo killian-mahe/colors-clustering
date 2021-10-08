@@ -19,5 +19,4 @@ jobs:
         pip install pylint
     - name: Analysing the code with pylint
       run: |
-        cd colors-clustering
         pylint colors_clustering
