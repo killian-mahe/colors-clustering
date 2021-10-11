@@ -24,16 +24,35 @@ from interfaces import AlgorithmType, KMeansOptions, AlgorithmOptions
 
 
 class AlgorithmWorker(QObject):
+    """
+    A worker who manages the calculation of colour clustering.
+    """
 
     result_ready = Signal(str)
 
-    def do_work(self, algorithm, file_path, options):
+    def do_work(self, algorithm: AlgorithmType, file_path: str, options: AlgorithmOptions):
+        """
+        Do the work.
+
+        Parameters
+        ----------
+        algorithm : AlgorithmType
+            Type of the algorithm.
+        file_path : str
+            Path to picture.
+        options : AlgorithmOptions
+            Options of the algorithm.
+
+        Returns
+        -------
+        None
+        """
         if algorithm == AlgorithmType.KMEANS:
             algo = KMeans(file_path)
             algo.fit(n_clusters=options.clusters)
-            self.result_ready.emit(algo.save(
-                os.path.split(file_path)[0] + "edited.png"
-            ))
+            self.result_ready.emit(
+                algo.save(os.path.split(file_path)[0] + "edited.png")
+            )
         else:
             raise NotImplementedError()
 
@@ -171,9 +190,10 @@ class MainWindow(QMainWindow):
         Create the menus displayed in the main window.
     open_file()
         Create a file dialog and update the selected picture.
-    apply()
-        Apply the selected algorithm.
+    handle_result()
+        Handle the results of finished algorithms.
     """
+
     compute = Signal(AlgorithmType, str, AlgorithmOptions)
 
     def __init__(self):
@@ -262,7 +282,11 @@ class MainWindow(QMainWindow):
 
         apply_button = QPushButton("Apply")
         self.layout.addWidget(apply_button, 1, 5)
-        apply_button.clicked.connect(lambda x: self.compute.emit(self.selected_algorithm, self.original_file_path, self.kmeans_options))
+        apply_button.clicked.connect(
+            lambda x: self.compute.emit(
+                self.selected_algorithm, self.original_file_path, self.kmeans_options
+            )
+        )
 
     def open_settings_menu(self):
         self.kmeans_options = KMeansOptionsDialog.GetOptions(self, self.kmeans_options)
@@ -284,7 +308,7 @@ class MainWindow(QMainWindow):
 
     def handle_result(self, edited_file_path):
         """
-        Apply the selected algorithm.
+        Handle the results of finished algorithms.
 
         Returns
         -------
