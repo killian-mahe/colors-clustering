@@ -32,7 +32,11 @@ class Algorithm:
         return NotImplementedError
 
 
-class KMeansOptions:
+class AlgorithmOptions:
+    pass
+
+
+class KMeansOptions(AlgorithmOptions):
     def __init__(self):
         self.clusters = 8
 

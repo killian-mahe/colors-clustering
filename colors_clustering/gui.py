@@ -4,6 +4,7 @@ Application related GUI.
 from copy import deepcopy
 import os
 
+from PySide6.QtCore import Signal, QObject, QThread
 from PySide6.QtGui import QAction, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -19,7 +20,22 @@ from PySide6.QtWidgets import (
 from PySide6 import QtWidgets, QtCore
 
 from colors_clustering.algorithms import KMeans
-from interfaces import AlgorithmType, KMeansOptions
+from interfaces import AlgorithmType, KMeansOptions, AlgorithmOptions
+
+
+class AlgorithmWorker(QObject):
+
+    result_ready = Signal(str)
+
+    def do_work(self, algorithm, file_path, options):
+        if algorithm == AlgorithmType.KMEANS:
+            algo = KMeans(file_path)
+            algo.fit(n_clusters=options.clusters)
+            self.result_ready.emit(algo.save(
+                os.path.split(file_path)[0] + "edited.png"
+            ))
+        else:
+            raise NotImplementedError()
 
 
 class KMeansOptionsDialog(QDialog):
@@ -158,6 +174,7 @@ class MainWindow(QMainWindow):
     apply()
         Apply the selected algorithm.
     """
+    compute = Signal(AlgorithmType, str, AlgorithmOptions)
 
     def __init__(self):
         """
@@ -171,12 +188,19 @@ class MainWindow(QMainWindow):
         self.edited_pixmap_item = None
         self.edited_file_path = ""
         self.selected_algorithm = None
+        self.algorithm_thread = QThread()
+        self.algorithm_worker = AlgorithmWorker()
         self.kmeans_options = KMeansOptions()
         self.create_image_view()
         self.create_menus()
         self.create_controls()
         self.setCentralWidget(QtWidgets.QWidget())
         self.centralWidget().setLayout(self.layout)
+
+        self.algorithm_worker.result_ready.connect(self.handle_result)
+        self.compute.connect(self.algorithm_worker.do_work)
+        self.algorithm_worker.moveToThread(self.algorithm_thread)
+        self.algorithm_thread.start()
 
     # noinspection PyAttributeOutsideInit
     def create_image_view(self):
@@ -238,12 +262,10 @@ class MainWindow(QMainWindow):
 
         apply_button = QPushButton("Apply")
         self.layout.addWidget(apply_button, 1, 5)
-        apply_button.clicked.connect(self.apply)
+        apply_button.clicked.connect(lambda x: self.compute.emit(self.selected_algorithm, self.original_file_path, self.kmeans_options))
 
     def open_settings_menu(self):
-        print("Opening settings menu")
         self.kmeans_options = KMeansOptionsDialog.GetOptions(self, self.kmeans_options)
-        print(self.kmeans_options)
 
     def update_algorithm(self, algorithm_name: str):
         """
@@ -260,7 +282,7 @@ class MainWindow(QMainWindow):
         """
         self.selected_algorithm = AlgorithmType(algorithm_name)
 
-    def apply(self):
+    def handle_result(self, edited_file_path):
         """
         Apply the selected algorithm.
 
@@ -268,12 +290,7 @@ class MainWindow(QMainWindow):
         -------
         None
         """
-        algo = KMeans(self.original_file_path)
-        algo.fit(n_clusters=self.kmeans_options.clusters)
-        self.edited_file_path = algo.save(
-            os.path.split(self.original_file_path)[0] + "edited.png"
-        )
-
+        self.edited_file_path = edited_file_path
         pixmap = QPixmap(self.edited_file_path)
         if self.edited_pixmap_item:
             self.edited_scene.removeItem(self.edited_pixmap_item)
@@ -294,5 +311,7 @@ class MainWindow(QMainWindow):
         pixmap = QPixmap(self.original_file_path)
         if self.original_pixmap_item:
             self.original_scene.removeItem(self.original_pixmap_item)
+        if self.edited_pixmap_item:
+            self.edited_scene.removeItem(self.edited_pixmap_item)
         self.original_pixmap_item = QGraphicsPixmapItem(pixmap)
         self.original_scene.addItem(self.original_pixmap_item)
