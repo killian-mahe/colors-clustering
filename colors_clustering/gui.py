@@ -2,6 +2,7 @@
 Application related GUI.
 """
 from copy import deepcopy
+import os
 
 from PySide6.QtGui import QAction, QIcon, QPixmap
 from PySide6.QtWidgets import (
@@ -17,7 +18,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6 import QtWidgets, QtCore
 
-from interfaces import Algorithm, KMeansOptions
+from colors_clustering.algorithms import KMeans
+from interfaces import AlgorithmType, KMeansOptions
 
 
 class KMeansOptionsDialog(QDialog):
@@ -153,6 +155,8 @@ class MainWindow(QMainWindow):
         Create the menus displayed in the main window.
     open_file()
         Create a file dialog and update the selected picture.
+    apply()
+        Apply the selected algorithm.
     """
 
     def __init__(self):
@@ -163,7 +167,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Colors clustering")
         self.layout = QGridLayout()
         self.original_pixmap_item = None
+        self.original_file_path = ""
         self.edited_pixmap_item = None
+        self.edited_file_path = ""
         self.selected_algorithm = None
         self.kmeans_options = KMeansOptions()
         self.create_image_view()
@@ -217,8 +223,8 @@ class MainWindow(QMainWindow):
         self.algorithm_select_combo_box = QComboBox(self)
         self.layout.addWidget(QLabel("Selected algorithm"), 0, 0, 1, 4)
         self.layout.addWidget(self.algorithm_select_combo_box, 1, 0, 1, 4)
-        self.layout.addWidget(QPushButton("Apply"), 1, 5)
-        for algorithm in Algorithm:
+
+        for algorithm in AlgorithmType:
             if not self.selected_algorithm:
                 self.selected_algorithm = algorithm
             self.algorithm_select_combo_box.addItem(algorithm.value)
@@ -229,6 +235,10 @@ class MainWindow(QMainWindow):
         options_button = QPushButton("Options")
         self.layout.addWidget(options_button, 1, 4)
         options_button.clicked.connect(self.open_settings_menu)
+
+        apply_button = QPushButton("Apply")
+        self.layout.addWidget(apply_button, 1, 5)
+        apply_button.clicked.connect(self.apply)
 
     def open_settings_menu(self):
         print("Opening settings menu")
@@ -248,7 +258,27 @@ class MainWindow(QMainWindow):
         -------
         None
         """
-        self.selected_algorithm = Algorithm(algorithm_name)
+        self.selected_algorithm = AlgorithmType(algorithm_name)
+
+    def apply(self):
+        """
+        Apply the selected algorithm.
+
+        Returns
+        -------
+        None
+        """
+        algo = KMeans(self.original_file_path)
+        algo.fit(n_clusters=self.kmeans_options.clusters)
+        self.edited_file_path = algo.save(
+            os.path.split(self.original_file_path)[0] + "edited.png"
+        )
+
+        pixmap = QPixmap(self.edited_file_path)
+        if self.edited_pixmap_item:
+            self.edited_scene.removeItem(self.edited_pixmap_item)
+        self.edited_pixmap_item = QGraphicsPixmapItem(pixmap)
+        self.edited_scene.addItem(self.edited_pixmap_item)
 
     def open_file(self):
         """
@@ -258,10 +288,10 @@ class MainWindow(QMainWindow):
         -------
         None
         """
-        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+        self.original_file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, "Open Image", "/", "Image Files (*.png *.jpg *.bmp)"
         )
-        pixmap = QPixmap(file_path)
+        pixmap = QPixmap(self.original_file_path)
         if self.original_pixmap_item:
             self.original_scene.removeItem(self.original_pixmap_item)
         self.original_pixmap_item = QGraphicsPixmapItem(pixmap)
