@@ -70,9 +70,9 @@ def color_in_array(array: list[list[int]], subarray: list[int]) -> bool:
     """
     for i in range(len(array)):
         if (
-                subarray[0] == array[i][0]
-                and subarray[1] == array[i][1]
-                and subarray[2] == array[i][2]
+            subarray[0] == array[i][0]
+            and subarray[1] == array[i][1]
+            and subarray[2] == array[i][2]
         ):
             return True
     return False
@@ -281,7 +281,6 @@ class KMeans(Algorithm):
 
 
 class DBScan(Algorithm):
-
     def __init__(self, picture_path: str, minimum_points: int = 3, epsilon: float = 5):
         super().__init__()
 
@@ -350,7 +349,8 @@ class DBScan(Algorithm):
                         for neighbour in neighbours[core_x, core_y]:
                             if (neighbour[0], neighbour[1]) == (55, 204):
                                 print(
-                                    f"(55, 204) is tested as {point_label[neighbour[0], neighbour[1]]} as the neighbour of ({core_x}, {core_y})")
+                                    f"(55, 204) is tested as {point_label[neighbour[0], neighbour[1]]} as the neighbour of ({core_x}, {core_y})"
+                                )
                             if point_label[neighbour[0], neighbour[1]] == CORE_POINT:
                                 q.put(neighbour)
                                 point_label[neighbour[0], neighbour[1]] = cluster
@@ -396,7 +396,9 @@ class DBScan(Algorithm):
                 self.cluster_mapping[point[0], point[1]] = cluster
                 for point in neighbours:
                     if self.cluster_mapping[point[0], point[1]] == 0:
-                        neighbours_bis = get_neighbours(self.pixels_map, point, self.epsilon)
+                        neighbours_bis = get_neighbours(
+                            self.pixels_map, point, self.epsilon
+                        )
                         if len(neighbours_bis) >= self.minimum_points:
                             neighbours += neighbours_bis
                     if self.cluster_mapping[point[0], point[1]] == 0:

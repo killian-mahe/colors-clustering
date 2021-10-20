@@ -6,7 +6,7 @@ import traceback
 import os
 
 from PySide6.QtCore import Signal, QObject, QThread
-from PySide6.QtGui import QAction, QIcon, QPixmap
+from PySide6.QtGui import QAction, QIcon, QPixmap, QIntValidator
 from PySide6.QtWidgets import (
     QMainWindow,
     QGridLayout,
@@ -17,11 +17,12 @@ from PySide6.QtWidgets import (
     QComboBox,
     QLabel,
     QDialog,
+    QLineEdit,
 )
 from PySide6 import QtWidgets, QtCore
 
 from colors_clustering.algorithms import KMeans, DBScan
-from interfaces import AlgorithmType, KMeansOptions, AlgorithmOptions
+from interfaces import AlgorithmType, KMeansOptions, AlgorithmOptions, DBScanOptions
 
 
 class AlgorithmWorker(QObject):
@@ -31,7 +32,9 @@ class AlgorithmWorker(QObject):
 
     result_ready = Signal(str)
 
-    def do_work(self, algorithm: AlgorithmType, file_path: str, options: AlgorithmOptions):
+    def do_work(
+        self, algorithm: AlgorithmType, file_path: str, options: AlgorithmOptions
+    ):
         """
         Do the work.
 
@@ -57,8 +60,8 @@ class AlgorithmWorker(QObject):
                 )
             elif algorithm == AlgorithmType.DBSCAN:
                 print("Starting DBScan algorithm")
-                algo = DBScan(file_path)
-                algo.fit_v2()
+                algo = DBScan(file_path, options.minimum_points, options.epsilon)
+                algo.fit()
                 self.result_ready.emit(
                     algo.save(os.path.split(file_path)[0] + "edited.png")
                 )
@@ -174,6 +177,121 @@ class KMeansOptionsDialog(QDialog):
         return dialog.options
 
 
+class DBScanOptionsDialog(QDialog):
+    """
+    A class to let the user choose KMeans algorithm options.
+
+    Attributes
+    ----------
+    layout : QGridLayout
+        Dialog grid layout.
+    initial_options : KMeansOptions
+        Initial options (by default or not).
+    options : KMeansOptions
+        Selected options.
+
+    Methods
+    -------
+    button_pressed()
+        Handle the press of the dialog buttons.
+    apply_style()
+        Apply the custom style on the dialog.
+    """
+
+    def __init__(self, parent, options: DBScanOptions = None):
+        """
+        Construct the dialog instance.
+
+        Parameters
+        ----------
+        parent : QtWidget
+            Qt parent.
+        options : KMeansOptions
+            Default options.
+        """
+        super().__init__(parent)
+        if options is None:
+            options = KMeansOptions()
+        self.initial_options = options
+        self.options = deepcopy(options)
+
+        self.layout = QGridLayout()
+        self.setLayout(self.layout)
+
+        self.epsilon_value_line_edit = QLineEdit()
+        self.nb_points_value_line_edit = QLineEdit()
+
+        self.epsilon_value_line_edit.setText(str(self.options.epsilon))
+        self.epsilon_value_line_edit.setValidator(QIntValidator(0, 100, self))
+
+        self.layout.addWidget(QLabel("Epsilon"), 0, 0)
+        self.layout.addWidget(self.epsilon_value_line_edit, 0, 1)
+
+        self.nb_points_value_line_edit.setText(str(self.options.minimum_points))
+        self.nb_points_value_line_edit.setValidator(QIntValidator(0, 100, self))
+
+        self.layout.addWidget(QLabel("Minimum number of points"), 1, 0)
+        self.layout.addWidget(self.nb_points_value_line_edit, 1, 1)
+
+        self.save_button = QPushButton("Save", self)
+        self.save_button.clicked.connect(self.button_pressed)
+        self.layout.addWidget(self.save_button, 2, 0)
+
+        self.cancel_button = QPushButton("Cancel", self)
+        self.cancel_button.clicked.connect(self.button_pressed)
+        self.layout.addWidget(self.cancel_button, 2, 1)
+
+        self.apply_style()
+
+    def button_pressed(self):
+        """
+        Handle the press of a button.
+
+        Returns
+        -------
+        None
+        """
+        if self.sender() == self.save_button:
+            self.options.epsilon = int(self.epsilon_value_line_edit.text())
+            self.options.minimum_points = int(self.nb_points_value_line_edit.text())
+        else:
+            self.options = self.initial_options
+        self.close()
+
+    def apply_style(self):
+        """
+        Apply the style on the dialog.
+
+        Returns
+        -------
+        None
+        """
+        self.setWindowTitle("K-Means options")
+        self.setMinimumWidth(300)
+        self.layout.setAlignment(QtCore.Qt.AlignTop)
+
+    @classmethod
+    def GetOptions(cls, parent, *args):
+        """
+        Open a KMeansOptionsDialog to get the algorithm parameters.
+
+        Parameters
+        ----------
+        parent : QtWidget
+            Qt parent.
+        args
+            Additional args.
+
+        Returns
+        -------
+        KMeansOptions
+        """
+        dialog = cls(parent, *args)
+        dialog.exec_()
+
+        return dialog.options
+
+
 class MainWindow(QMainWindow):
     """
     A class to represent the app main window.
@@ -220,11 +338,14 @@ class MainWindow(QMainWindow):
         self.algorithm_thread = QThread()
         self.algorithm_worker = AlgorithmWorker()
         self.kmeans_options = KMeansOptions()
+        self.dbscan_options = DBScanOptions()
         self.create_image_view()
         self.create_menus()
         self.create_controls()
         self.setCentralWidget(QtWidgets.QWidget())
         self.centralWidget().setLayout(self.layout)
+
+        self.setWindowIcon(QIcon("./colors_clustering/assets/logo.jpg"))
 
         self.algorithm_worker.result_ready.connect(self.handle_result)
         self.compute.connect(self.algorithm_worker.do_work)
@@ -293,12 +414,23 @@ class MainWindow(QMainWindow):
         self.layout.addWidget(apply_button, 1, 5)
         apply_button.clicked.connect(
             lambda x: self.compute.emit(
-                self.selected_algorithm, self.original_file_path, self.kmeans_options
+                self.selected_algorithm,
+                self.original_file_path,
+                self.kmeans_options
+                if self.selected_algorithm == AlgorithmType.KMEANS
+                else self.dbscan_options,
             )
         )
 
     def open_settings_menu(self):
-        self.kmeans_options = KMeansOptionsDialog.GetOptions(self, self.kmeans_options)
+        if self.selected_algorithm == AlgorithmType.KMEANS:
+            self.kmeans_options = KMeansOptionsDialog.GetOptions(
+                self, self.kmeans_options
+            )
+        elif self.selected_algorithm == AlgorithmType.DBSCAN:
+            self.dbscan_options = DBScanOptionsDialog.GetOptions(
+                self, self.dbscan_options
+            )
 
     def update_algorithm(self, algorithm_name: str):
         """
