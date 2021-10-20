@@ -1,12 +1,34 @@
+import queue
+from functools import partial
 import multiprocessing as mp
-import math
+import itertools
 import random
 import copy
+import math
 
 import numpy as np
 import skimage.io
 
 from interfaces import Algorithm
+
+CORE_POINT = -1
+EDGE_POINT = -2
+NOISE_POINT = -3
+
+
+def neighbour_points(data, epsilon, coord: tuple):
+    point = data[coord[0], coord[1]]
+
+    distances = np.linalg.norm(data - point, axis=2)
+    x, y = np.where(distances <= epsilon)
+    return [coord[0], coord[1]] + list(zip(x, y))
+
+
+def get_neighbours(pixels_map, point, epsilon):
+
+    distances = np.linalg.norm(pixels_map - pixels_map[point[0], point[1]], axis=2)
+    x, y = np.where(distances <= epsilon)
+    return list(zip(x, y))
 
 
 def picture_to_pixelmap(picture_path: str) -> np.array:
@@ -48,9 +70,9 @@ def color_in_array(array: list[list[int]], subarray: list[int]) -> bool:
     """
     for i in range(len(array)):
         if (
-            subarray[0] == array[i][0]
-            and subarray[1] == array[i][1]
-            and subarray[2] == array[i][2]
+                subarray[0] == array[i][0]
+                and subarray[1] == array[i][1]
+                and subarray[2] == array[i][2]
         ):
             return True
     return False
@@ -82,6 +104,10 @@ def color_distance(r1: int, g1: int, b1: int, r2: int, g2: int, b2: int) -> floa
     return math.sqrt(
         pow(float(r1) - r2, 2) + pow(float(g1) - g2, 2) + pow(float(b1) - b2, 2)
     )
+
+
+def color_distance_matrix(color_a, color_b):
+    return np.linalg.norm(color_b - color_a)
 
 
 def choose_best_cluster(data: tuple[int, int, list, list]) -> tuple[int, int, int]:
@@ -252,3 +278,163 @@ class KMeans(Algorithm):
                 x = random.randrange(0, width)
                 y = random.randrange(0, height)
             self.clusters_points.append([x, y, self.pixels_map[x][y]])
+
+
+class DBScan(Algorithm):
+
+    def __init__(self, picture_path: str, minimum_points: int = 3, epsilon: float = 5):
+        super().__init__()
+
+        if picture_path:
+            self.pixels_map = picture_to_pixelmap(picture_path)
+        else:
+            self.pixels_map = None
+
+        self.cluster_mapping = None
+        self.nb_cluster = 0
+        self.minimum_points = minimum_points
+        self.epsilon = epsilon
+        self.trained = False
+
+    def fit_old(self, picture_path: str = None):
+        if picture_path:
+            self.pixels_map = picture_to_pixelmap(picture_path)
+        if not self.pixels_map.any():
+            raise RuntimeError("You must provide the path of the picture.")
+
+        width, height, _ = self.pixels_map.shape
+
+        points = list(itertools.product(np.arange(width), np.arange(height)))
+
+        func = partial(neighbour_points, self.pixels_map, self.epsilon)
+
+        with mp.Pool(mp.cpu_count()) as p:
+            neighbours_map = p.map(func, points)
+
+        print("Finished")
+
+        neighbours = np.empty((width, height), dtype=object)
+
+        for point in neighbours_map:
+            neighbours[point[0], point[1]] = point[2:]
+
+        point_label = np.empty((width, height))
+
+        for x in range(width):
+            for y in range(height):
+                if len(neighbours[x, y]) >= self.minimum_points:
+                    point_label[x, y] = CORE_POINT
+                else:
+                    point_label[x, y] = NOISE_POINT
+
+        x, y = np.where(point_label == NOISE_POINT)
+
+        for point in zip(x, y):
+            for neighbour in neighbours[point[0], point[1]]:
+                if point_label[neighbour[0], neighbour[1]] == CORE_POINT:
+                    point_label[point[0], point[1]] = EDGE_POINT
+                    break
+
+        print(f"(55, 196) label : {point_label[55, 196]}")
+
+        cluster = 1
+
+        for x in range(width):
+            for y in range(height):
+                q = queue.Queue()
+                if point_label[x, y] == CORE_POINT:
+                    q.put((x, y))
+
+                    while not q.empty():
+                        core_x, core_y = q.get()
+                        for neighbour in neighbours[core_x, core_y]:
+                            if (neighbour[0], neighbour[1]) == (55, 204):
+                                print(
+                                    f"(55, 204) is tested as {point_label[neighbour[0], neighbour[1]]} as the neighbour of ({core_x}, {core_y})")
+                            if point_label[neighbour[0], neighbour[1]] == CORE_POINT:
+                                q.put(neighbour)
+                                point_label[neighbour[0], neighbour[1]] = cluster
+                            elif point_label[neighbour[0], neighbour[1]] == EDGE_POINT:
+                                point_label[neighbour[0], neighbour[1]] = cluster
+                    cluster += 1
+
+        print(f"{cluster} clusters")
+
+        self.nb_cluster = cluster - 1
+
+        print(point_label)
+
+        x, y = np.where(point_label == EDGE_POINT)
+        print(f"Neighbours of (55, 204) (Edge) : {neighbours[55, 204]}")
+        print(f"Neighbours of (55, 196) (Core) : {neighbours[55, 196]}")
+
+        self.cluster_mapping = point_label
+        self.trained = True
+
+    def fit(self, picture_path: str = None):
+        if picture_path:
+            self.pixels_map = picture_to_pixelmap(picture_path)
+        if not self.pixels_map.any():
+            raise RuntimeError("You must provide the path of the picture.")
+
+        width, height, _ = self.pixels_map.shape
+
+        self.cluster_mapping = np.zeros((width, height))
+
+        cluster = 0
+        to_label_x, to_label_y = np.where(self.cluster_mapping == 0)
+        to_label = list(zip(to_label_x, to_label_y))
+
+        print(len(to_label))
+        while len(to_label):
+            point = to_label[0]
+            neighbours = get_neighbours(self.pixels_map, point, self.epsilon)
+            if len(neighbours) < self.minimum_points:
+                self.cluster_mapping[point[0], point[1]] = -1
+            else:
+                cluster += 1
+                self.cluster_mapping[point[0], point[1]] = cluster
+                for point in neighbours:
+                    if self.cluster_mapping[point[0], point[1]] == 0:
+                        neighbours_bis = get_neighbours(self.pixels_map, point, self.epsilon)
+                        if len(neighbours_bis) >= self.minimum_points:
+                            neighbours += neighbours_bis
+                    if self.cluster_mapping[point[0], point[1]] == 0:
+                        self.cluster_mapping[point[0], point[1]] = cluster
+            to_label_x, to_label_y = np.where(self.cluster_mapping == 0)
+            to_label = list(zip(to_label_x, to_label_y))
+            print(len(to_label))
+        self.nb_cluster = cluster
+        self.trained = True
+
+    def save(self, file_path) -> str:
+        """
+        Export and save the new edited picture in file_path.
+
+        Parameters
+        ----------
+        file_path : str
+
+        Returns
+        -------
+        str
+        """
+        skimage.io.imsave(file_path, self.export())
+        return file_path
+
+    def export(self):
+        if not self.trained:
+            raise RuntimeError("You must train the model first.")
+
+        result = copy.deepcopy(self.pixels_map)
+
+        for i in np.arange(1, self.nb_cluster + 1):
+            x, y = np.where(self.cluster_mapping == i)
+            colors = result[x, y]
+            mean_color = np.sum(colors, axis=0) / len(colors)
+            result[x, y] = mean_color
+
+        x, y = np.where(self.cluster_mapping == NOISE_POINT)
+        result[x, y] = [255, 255, 255]
+
+        return result

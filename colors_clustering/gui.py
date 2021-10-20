@@ -2,6 +2,7 @@
 Application related GUI.
 """
 from copy import deepcopy
+import traceback
 import os
 
 from PySide6.QtCore import Signal, QObject, QThread
@@ -19,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6 import QtWidgets, QtCore
 
-from colors_clustering.algorithms import KMeans
+from colors_clustering.algorithms import KMeans, DBScan
 from interfaces import AlgorithmType, KMeansOptions, AlgorithmOptions
 
 
@@ -47,14 +48,22 @@ class AlgorithmWorker(QObject):
         -------
         None
         """
-        if algorithm == AlgorithmType.KMEANS:
-            algo = KMeans(file_path)
-            algo.fit(n_clusters=options.clusters)
-            self.result_ready.emit(
-                algo.save(os.path.split(file_path)[0] + "edited.png")
-            )
-        else:
-            raise NotImplementedError()
+        try:
+            if algorithm == AlgorithmType.KMEANS:
+                algo = KMeans(file_path)
+                algo.fit(n_clusters=options.clusters)
+                self.result_ready.emit(
+                    algo.save(os.path.split(file_path)[0] + "edited.png")
+                )
+            elif algorithm == AlgorithmType.DBSCAN:
+                print("Starting DBScan algorithm")
+                algo = DBScan(file_path)
+                algo.fit_v2()
+                self.result_ready.emit(
+                    algo.save(os.path.split(file_path)[0] + "edited.png")
+                )
+        except Exception:
+            print(traceback.format_exc())
 
 
 class KMeansOptionsDialog(QDialog):
