@@ -42,3 +42,12 @@ class KMeansOptions(AlgorithmOptions):
 
     def __str__(self):
         return f"K-Means options : {self.__dict__}"
+
+
+class DBScanOptions(AlgorithmOptions):
+    def __init__(self):
+        self.minimum_points = 3
+        self.epsilon = 1.5
+
+    def str(self):
+        return f"DBScan options : {self.__dict__}"
