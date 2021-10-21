@@ -8,6 +8,11 @@ class AlgorithmType(Enum):
     DBSCAN = "DBScan"
 
 
+class DistanceType(Enum):
+    EUCLIDEAN = 2
+    MANHATTAN = 1
+
+
 class Algorithm:
     """
     Abstract class for algorithm.
@@ -35,11 +40,13 @@ class Algorithm:
 
 
 class AlgorithmOptions:
-    pass
+    def __init__(self):
+        self.distance_type = DistanceType.EUCLIDEAN
 
 
 class KMeansOptions(AlgorithmOptions):
     def __init__(self):
+        super().__init__()
         self.clusters = 8
         self.accuracy = 1
 
@@ -49,6 +56,7 @@ class KMeansOptions(AlgorithmOptions):
 
 class DBScanOptions(AlgorithmOptions):
     def __init__(self):
+        super().__init__()
         self.minimum_points = 3
         self.epsilon = 1.5
 

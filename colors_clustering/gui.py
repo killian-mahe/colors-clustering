@@ -24,7 +24,13 @@ from PySide6.QtWidgets import (
 from PySide6 import QtWidgets, QtCore
 
 from colors_clustering.algorithms import KMeans, DBScan
-from interfaces import AlgorithmType, KMeansOptions, AlgorithmOptions, DBScanOptions
+from interfaces import (
+    AlgorithmType,
+    KMeansOptions,
+    AlgorithmOptions,
+    DBScanOptions,
+    DistanceType,
+)
 
 
 class AlgorithmWorker(QObject):
@@ -59,21 +65,30 @@ class AlgorithmWorker(QObject):
             if algorithm == AlgorithmType.KMEANS:
                 algo = KMeans(file_path)
                 self.stateChanged.emit("Applying KMeans algorithm")
-                algo.fit(n_clusters=options.clusters, accuracy=options.accuracy)
+                algo.fit(
+                    n_clusters=options.clusters,
+                    accuracy=options.accuracy,
+                    distance_order=options.distance_type.value,
+                )
                 self.stateChanged.emit("Exporting result")
                 self.result_ready.emit(
                     algo.save(os.path.split(file_path)[0] + "edited.png")
                 )
             elif algorithm == AlgorithmType.DBSCAN:
-                algo = DBScan(file_path, options.minimum_points, options.epsilon)
+                algo = DBScan(file_path)
                 self.stateChanged.emit("Applying DBScan algorithm")
                 algo.progress.connect(lambda x: self.progress.emit(x))
-                algo.fit()
+                algo.fit(
+                    options.minimum_points,
+                    options.epsilon,
+                    distance_order=options.distance_type.value,
+                )
                 self.stateChanged.emit("Exporting result")
                 self.result_ready.emit(
                     algo.save(os.path.split(file_path)[0] + "edited.png")
                 )
         except Exception:
+            self.stateChanged.emit("An error as occurred. Please retry.")
             print(traceback.format_exc())
 
 
@@ -120,25 +135,35 @@ class KMeansOptionsDialog(QDialog):
 
         self.k_value_combo_box = QComboBox()
         self.accuracy_line_edit = QLineEdit()
+        self.distance_type_combo_box = QComboBox()
         self.accuracy_line_edit.setText(str(options.accuracy))
 
         for i in [8, 16, 32, 64]:
             self.k_value_combo_box.addItem(str(i))
         self.k_value_combo_box.setCurrentText(str(self.options.clusters))
 
-        self.layout.addWidget(QLabel("Number of clusters"), 0, 0)
-        self.layout.addWidget(self.k_value_combo_box, 0, 1)
+        for distance_type in DistanceType:
+            self.distance_type_combo_box.addItem(str(distance_type.name))
+        self.distance_type_combo_box.setCurrentText(
+            str(self.options.distance_type.name)
+        )
 
-        self.layout.addWidget(QLabel("Accuracy [0; 255]"), 1, 0)
-        self.layout.addWidget(self.accuracy_line_edit, 1, 1)
+        self.layout.addWidget(QLabel("Distance type"), 0, 0)
+        self.layout.addWidget(self.distance_type_combo_box, 0, 1)
+
+        self.layout.addWidget(QLabel("Number of clusters"), 1, 0)
+        self.layout.addWidget(self.k_value_combo_box, 1, 1)
+
+        self.layout.addWidget(QLabel("Accuracy [0; 255]"), 2, 0)
+        self.layout.addWidget(self.accuracy_line_edit, 2, 1)
 
         self.save_button = QPushButton("Save", self)
         self.save_button.clicked.connect(self.button_pressed)
-        self.layout.addWidget(self.save_button, 2, 0)
+        self.layout.addWidget(self.save_button, 3, 0)
 
         self.cancel_button = QPushButton("Cancel", self)
         self.cancel_button.clicked.connect(self.button_pressed)
-        self.layout.addWidget(self.cancel_button, 2, 1)
+        self.layout.addWidget(self.cancel_button, 3, 1)
 
         self.apply_style()
 
@@ -151,8 +176,11 @@ class KMeansOptionsDialog(QDialog):
         None
         """
         if self.sender() == self.save_button:
+            self.options.distance_type = DistanceType[
+                self.distance_type_combo_box.currentText()
+            ]
             self.options.clusters = int(self.k_value_combo_box.currentText())
-            self.options.accuracy = int(self.accuracy_line_edit.text())
+            self.options.accuracy = float(self.accuracy_line_edit.text())
         else:
             self.options = self.initial_options
         self.close()
@@ -234,26 +262,34 @@ class DBScanOptionsDialog(QDialog):
 
         self.epsilon_value_line_edit = QLineEdit()
         self.nb_points_value_line_edit = QLineEdit()
+        self.distance_type_combo_box = QComboBox()
+
+        for distance_type in DistanceType:
+            self.distance_type_combo_box.addItem(str(distance_type.name))
+        self.distance_type_combo_box.setCurrentText(
+            str(self.options.distance_type.name)
+        )
 
         self.epsilon_value_line_edit.setText(str(self.options.epsilon))
-        self.epsilon_value_line_edit.setValidator(QIntValidator(0, 100, self))
 
-        self.layout.addWidget(QLabel("Epsilon"), 0, 0)
-        self.layout.addWidget(self.epsilon_value_line_edit, 0, 1)
+        self.layout.addWidget(QLabel("Distance type"), 0, 0)
+        self.layout.addWidget(self.distance_type_combo_box, 0, 1)
+
+        self.layout.addWidget(QLabel("Epsilon"), 1, 0)
+        self.layout.addWidget(self.epsilon_value_line_edit, 1, 1)
 
         self.nb_points_value_line_edit.setText(str(self.options.minimum_points))
-        self.nb_points_value_line_edit.setValidator(QIntValidator(0, 100, self))
 
-        self.layout.addWidget(QLabel("Minimum number of points"), 1, 0)
-        self.layout.addWidget(self.nb_points_value_line_edit, 1, 1)
+        self.layout.addWidget(QLabel("Minimum number of points"), 2, 0)
+        self.layout.addWidget(self.nb_points_value_line_edit, 2, 1)
 
         self.save_button = QPushButton("Save", self)
         self.save_button.clicked.connect(self.button_pressed)
-        self.layout.addWidget(self.save_button, 2, 0)
+        self.layout.addWidget(self.save_button, 3, 0)
 
         self.cancel_button = QPushButton("Cancel", self)
         self.cancel_button.clicked.connect(self.button_pressed)
-        self.layout.addWidget(self.cancel_button, 2, 1)
+        self.layout.addWidget(self.cancel_button, 3, 1)
 
         self.apply_style()
 
@@ -266,7 +302,10 @@ class DBScanOptionsDialog(QDialog):
         None
         """
         if self.sender() == self.save_button:
-            self.options.epsilon = int(self.epsilon_value_line_edit.text())
+            self.options.distance_type = DistanceType[
+                self.distance_type_combo_box.currentText()
+            ]
+            self.options.epsilon = float(self.epsilon_value_line_edit.text())
             self.options.minimum_points = int(self.nb_points_value_line_edit.text())
         else:
             self.options = self.initial_options
