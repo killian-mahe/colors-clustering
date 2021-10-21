@@ -4,10 +4,15 @@ WORKDIR /user/src/app
 
 RUN python3 -m venv /opt/venv
 
+RUN apt-get update
+RUN apt-get install ffmpeg libsm6 libxext6 libopengl0 libegl1  -y
+
 # Install dependencies:
 COPY requirements.txt .
 RUN . /opt/venv/bin/activate && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "colors_clustering"]
+RUN ls
+
+CMD . /opt/venv/bin/activate && exec python colors_clustering

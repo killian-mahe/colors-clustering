@@ -6,7 +6,7 @@ import sys
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
-from colors_clustering.gui import MainWindow
+from gui import MainWindow
 
 
 if __name__ == "__main__":

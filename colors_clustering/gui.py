@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6 import QtWidgets, QtCore
 
-from colors_clustering.algorithms import KMeans, DBScan
+from algorithms import KMeans, DBScan
 from interfaces import (
     AlgorithmType,
     KMeansOptions,
@@ -319,7 +319,7 @@ class DBScanOptionsDialog(QDialog):
         -------
         None
         """
-        self.setWindowTitle("K-Means options")
+        self.setWindowTitle("DBScan options")
         self.setMinimumWidth(300)
         self.layout.setAlignment(QtCore.Qt.AlignTop)
 
