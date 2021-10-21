@@ -373,6 +373,6 @@ class DBScan(Algorithm, QObject):
             result[x, y] = mean_color
 
         x, y = np.where(self.cluster_mapping == NOISE_POINT)
-        result[x, y] = [255, 255, 255]
+        result[x, y] = [0, 0, 0]
 
         return result
