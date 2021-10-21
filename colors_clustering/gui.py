@@ -271,7 +271,6 @@ class DBScanOptionsDialog(QDialog):
         )
 
         self.epsilon_value_line_edit.setText(str(self.options.epsilon))
-        self.epsilon_value_line_edit.setValidator(QIntValidator(0, 100, self))
 
         self.layout.addWidget(QLabel("Distance type"), 0, 0)
         self.layout.addWidget(self.distance_type_combo_box, 0, 1)
@@ -280,7 +279,6 @@ class DBScanOptionsDialog(QDialog):
         self.layout.addWidget(self.epsilon_value_line_edit, 1, 1)
 
         self.nb_points_value_line_edit.setText(str(self.options.minimum_points))
-        self.nb_points_value_line_edit.setValidator(QIntValidator(0, 100, self))
 
         self.layout.addWidget(QLabel("Minimum number of points"), 2, 0)
         self.layout.addWidget(self.nb_points_value_line_edit, 2, 1)
