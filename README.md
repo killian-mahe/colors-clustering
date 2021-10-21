@@ -87,7 +87,7 @@ Before clonning the repository, you should create a new virtual environment (usi
    ```
 4. Install required packages
    ```sh
-   pip3 install -r /path/to/requirements.txt
+   pip3 install -r requirements.txt
    ```
 
 ### Use
