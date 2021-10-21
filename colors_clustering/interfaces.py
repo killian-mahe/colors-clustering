@@ -2,6 +2,8 @@ from enum import Enum
 
 
 class AlgorithmType(Enum):
+    """All the different types of supported algorithms."""
+
     KMEANS = "K-Means"
     DBSCAN = "DBScan"
 
@@ -39,6 +41,7 @@ class AlgorithmOptions:
 class KMeansOptions(AlgorithmOptions):
     def __init__(self):
         self.clusters = 8
+        self.accuracy = 1
 
     def __str__(self):
         return f"K-Means options : {self.__dict__}"

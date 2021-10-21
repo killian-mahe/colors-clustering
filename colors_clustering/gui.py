@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QDialog,
     QLineEdit,
+    QProgressBar,
+    QStatusBar,
 )
 from PySide6 import QtWidgets, QtCore
 
@@ -31,6 +33,8 @@ class AlgorithmWorker(QObject):
     """
 
     result_ready = Signal(str)
+    progress = Signal(int)
+    stateChanged = Signal(str)
 
     def do_work(
         self, algorithm: AlgorithmType, file_path: str, options: AlgorithmOptions
@@ -54,14 +58,18 @@ class AlgorithmWorker(QObject):
         try:
             if algorithm == AlgorithmType.KMEANS:
                 algo = KMeans(file_path)
-                algo.fit(n_clusters=options.clusters)
+                self.stateChanged.emit("Applying KMeans algorithm")
+                algo.fit(n_clusters=options.clusters, accuracy=options.accuracy)
+                self.stateChanged.emit("Exporting result")
                 self.result_ready.emit(
                     algo.save(os.path.split(file_path)[0] + "edited.png")
                 )
             elif algorithm == AlgorithmType.DBSCAN:
-                print("Starting DBScan algorithm")
                 algo = DBScan(file_path, options.minimum_points, options.epsilon)
+                self.stateChanged.emit("Applying DBScan algorithm")
+                algo.progress.connect(lambda x: self.progress.emit(x))
                 algo.fit()
+                self.stateChanged.emit("Exporting result")
                 self.result_ready.emit(
                     algo.save(os.path.split(file_path)[0] + "edited.png")
                 )
@@ -111,6 +119,8 @@ class KMeansOptionsDialog(QDialog):
         self.setLayout(self.layout)
 
         self.k_value_combo_box = QComboBox()
+        self.accuracy_line_edit = QLineEdit()
+        self.accuracy_line_edit.setText(str(options.accuracy))
 
         for i in [8, 16, 32, 64]:
             self.k_value_combo_box.addItem(str(i))
@@ -119,13 +129,16 @@ class KMeansOptionsDialog(QDialog):
         self.layout.addWidget(QLabel("Number of clusters"), 0, 0)
         self.layout.addWidget(self.k_value_combo_box, 0, 1)
 
+        self.layout.addWidget(QLabel("Accuracy [0; 255]"), 1, 0)
+        self.layout.addWidget(self.accuracy_line_edit, 1, 1)
+
         self.save_button = QPushButton("Save", self)
         self.save_button.clicked.connect(self.button_pressed)
-        self.layout.addWidget(self.save_button, 1, 0)
+        self.layout.addWidget(self.save_button, 2, 0)
 
         self.cancel_button = QPushButton("Cancel", self)
         self.cancel_button.clicked.connect(self.button_pressed)
-        self.layout.addWidget(self.cancel_button, 1, 1)
+        self.layout.addWidget(self.cancel_button, 2, 1)
 
         self.apply_style()
 
@@ -139,6 +152,7 @@ class KMeansOptionsDialog(QDialog):
         """
         if self.sender() == self.save_button:
             self.options.clusters = int(self.k_value_combo_box.currentText())
+            self.options.accuracy = int(self.accuracy_line_edit.text())
         else:
             self.options = self.initial_options
         self.close()
@@ -348,9 +362,16 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon("./colors_clustering/assets/logo.jpg"))
 
         self.algorithm_worker.result_ready.connect(self.handle_result)
+        self.algorithm_worker.progress.connect(self.handle_algorithm_progress)
+        self.algorithm_worker.stateChanged.connect(
+            lambda x: self.statusBar().showMessage(x)
+        )
         self.compute.connect(self.algorithm_worker.do_work)
         self.algorithm_worker.moveToThread(self.algorithm_thread)
         self.algorithm_thread.start()
+
+    def handle_algorithm_progress(self, value):
+        self.progress_bar.setValue(value)
 
     # noinspection PyAttributeOutsideInit
     def create_image_view(self):
@@ -363,11 +384,11 @@ class MainWindow(QMainWindow):
         """
         self.original_scene = QGraphicsScene()
         self.original_view = QGraphicsView(self.original_scene)
-        self.layout.addWidget(self.original_view, 2, 0, 1, 3)
+        self.layout.addWidget(self.original_view, 2, 1, 1, 3)
 
         self.edited_scene = QGraphicsScene()
         self.edited_view = QGraphicsView(self.edited_scene)
-        self.layout.addWidget(self.edited_view, 2, 3, 1, 3)
+        self.layout.addWidget(self.edited_view, 2, 4, 1, 3)
 
     def create_menus(self):
         """
@@ -377,13 +398,15 @@ class MainWindow(QMainWindow):
         -------
         None
         """
-        button_action = QAction(QIcon("bug.png"), "&Open", self)
-        button_action.setStatusTip("Open a new picture")
+        button_action = QAction(QIcon("bug.png"), "&Import", self)
+        button_action.setStatusTip("Import a new picture")
         button_action.triggered.connect(self.open_file)
 
         menu = self.menuBar()
         file_menu = menu.addMenu("&File")
         file_menu.addAction(button_action)
+
+        self.setStatusBar(QStatusBar())
 
     # noinspection PyAttributeOutsideInit
     def create_controls(self):
@@ -395,8 +418,16 @@ class MainWindow(QMainWindow):
         None
         """
         self.algorithm_select_combo_box = QComboBox(self)
-        self.layout.addWidget(QLabel("Selected algorithm"), 0, 0, 1, 4)
-        self.layout.addWidget(self.algorithm_select_combo_box, 1, 0, 1, 4)
+        self.layout.addWidget(
+            QLabel(
+                "Import a picture  >  Selected an algorithm  >  Change the algorithm options  >  Apply it on your picture !"
+            ),
+            0,
+            1,
+            1,
+            4,
+        )
+        self.layout.addWidget(self.algorithm_select_combo_box, 1, 1, 1, 4)
 
         for algorithm in AlgorithmType:
             if not self.selected_algorithm:
@@ -406,12 +437,17 @@ class MainWindow(QMainWindow):
             self.update_algorithm
         )
 
+        self.progress_bar = QProgressBar()
+        self.layout.addWidget(self.progress_bar, 3, 1, 1, 6)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+
         options_button = QPushButton("Options")
-        self.layout.addWidget(options_button, 1, 4)
+        self.layout.addWidget(options_button, 1, 5)
         options_button.clicked.connect(self.open_settings_menu)
 
         apply_button = QPushButton("Apply")
-        self.layout.addWidget(apply_button, 1, 5)
+        self.layout.addWidget(apply_button, 1, 6)
         apply_button.clicked.connect(
             lambda x: self.compute.emit(
                 self.selected_algorithm,
@@ -423,6 +459,13 @@ class MainWindow(QMainWindow):
         )
 
     def open_settings_menu(self):
+        """
+        Open the settings menu corresponding to the selected algorithm.
+
+        Returns
+        -------
+        None
+        """
         if self.selected_algorithm == AlgorithmType.KMEANS:
             self.kmeans_options = KMeansOptionsDialog.GetOptions(
                 self, self.kmeans_options
@@ -455,6 +498,7 @@ class MainWindow(QMainWindow):
         -------
         None
         """
+        self.progress_bar.setValue(0)
         self.edited_file_path = edited_file_path
         pixmap = QPixmap(self.edited_file_path)
         if self.edited_pixmap_item:
