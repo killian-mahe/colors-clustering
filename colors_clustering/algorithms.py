@@ -1,3 +1,4 @@
+from functools import partial
 import multiprocessing as mp
 import numpy as np
 import random
@@ -11,7 +12,9 @@ from interfaces import Algorithm
 NOISE_POINT = -3
 
 
-def get_neighbours(pixels_map: np.array, point: np.array, epsilon: float):
+def get_neighbours(
+    pixels_map: np.array, point: np.array, epsilon: float, distance_order: int
+):
     """
     Get all the neighbours of a point in the given radius.
 
@@ -23,13 +26,17 @@ def get_neighbours(pixels_map: np.array, point: np.array, epsilon: float):
         The point to get the neighbours of.
     epsilon : float
         The radius where to search.
+    distance_order : int
+        Order of the Frobenius norm.
 
     Returns
     -------
     list of coordinates.
     """
 
-    distances = np.linalg.norm(pixels_map - pixels_map[point[0], point[1]], axis=2)
+    distances = np.linalg.norm(
+        pixels_map - pixels_map[point[0], point[1]], ord=distance_order, axis=2
+    )
     x, y = np.where(distances <= epsilon)
     return list(zip(x, y))
 
@@ -81,20 +88,29 @@ def color_in_array(array: list[list[int]], subarray: list[int]) -> bool:
     return False
 
 
-def choose_best_cluster(data: tuple[int, int, list, list]) -> tuple[int, int, int]:
+def choose_best_cluster(
+    distance_order: int, data: tuple[int, int, list, list]
+) -> tuple[int, int, int]:
     """
     Choose the nearest cluster point.
 
     Parameters
     ----------
+    distance_order : int
+        Order of the Frobenius norm.
     data : (int, int, list, list)
         Data as (x, y, [R, G, B], list_of_clusters)
+
     Returns
     -------
     (int, int, int)
     """
     x, y, color, clusters_points = data
-    return x, y, np.argmin(np.linalg.norm(clusters_points - color, axis=1))
+    return (
+        x,
+        y,
+        np.argmin(np.linalg.norm(clusters_points - color, ord=distance_order, axis=1)),
+    )
 
 
 class KMeans(Algorithm):
@@ -122,7 +138,7 @@ class KMeans(Algorithm):
         Create new random clusters.
     """
 
-    def __init__(self, picture_path: str = None):
+    def __init__(self, picture_path: str):
         """
         Create a KMeans model instance.
 
@@ -139,18 +155,23 @@ class KMeans(Algorithm):
         self.clusters_points = []
         self.trained = False
 
-    def fit(self, picture_path: str = None, n_clusters: int = 8, accuracy: float = 1):
+    def fit(
+        self,
+        n_clusters: int = 8,
+        accuracy: float = 1,
+        distance_order: int = 2,
+    ):
         """
         Train and fit the algorithm.
 
         Parameters
         ----------
-        picture_path : str
-            Path of the picture.
         n_clusters : int
             Number of clusters to create.
         accuracy : float
             Maximum mean distance between cluster centers
+        distance_order : int
+            Order of the Frobenius norm.
 
         Returns
         -------
@@ -158,8 +179,6 @@ class KMeans(Algorithm):
         """
         self.n_clusters = n_clusters
 
-        if picture_path:
-            self.pixels_map = picture_to_pixelmap(picture_path)
         if not self.pixels_map.any():
             raise RuntimeError("You must provide the path of the picture.")
 
@@ -178,7 +197,7 @@ class KMeans(Algorithm):
                     )
 
             with mp.Pool(8) as p:
-                result = p.map(choose_best_cluster, colors_map)
+                result = p.map(partial(choose_best_cluster, distance_order), colors_map)
 
             for (x, y, cluster) in result:
                 self.nearest_cluster[x][y] = cluster
@@ -259,7 +278,7 @@ class KMeans(Algorithm):
 class DBScan(Algorithm, QObject):
     progress = Signal(int)
 
-    def __init__(self, picture_path: str, minimum_points: int = 3, epsilon: float = 5):
+    def __init__(self, picture_path: str):
         super().__init__()
 
         if picture_path:
@@ -269,15 +288,21 @@ class DBScan(Algorithm, QObject):
 
         self.cluster_mapping = None
         self.nb_cluster = 0
-        self.minimum_points = minimum_points
-        self.epsilon = epsilon
+        self.minimum_points = 5
+        self.epsilon = 3
         self.trained = False
 
-    def fit(self, picture_path: str = None):
-        if picture_path:
-            self.pixels_map = picture_to_pixelmap(picture_path)
+    def fit(
+        self,
+        minimum_points: int = 3,
+        epsilon: float = 5,
+        distance_order: int = 2,
+    ):
         if not self.pixels_map.any():
             raise RuntimeError("You must provide the path of the picture.")
+
+        self.minimum_points = minimum_points
+        self.epsilon = epsilon
 
         width, height, _ = self.pixels_map.shape
 
@@ -291,7 +316,9 @@ class DBScan(Algorithm, QObject):
 
         while len(to_label):
             point = to_label[0]
-            neighbours = get_neighbours(self.pixels_map, point, self.epsilon)
+            neighbours = get_neighbours(
+                self.pixels_map, point, self.epsilon, distance_order
+            )
             if len(neighbours) < self.minimum_points:
                 self.cluster_mapping[point[0], point[1]] = NOISE_POINT
             else:
@@ -300,7 +327,7 @@ class DBScan(Algorithm, QObject):
                 for point in neighbours:
                     if self.cluster_mapping[point[0], point[1]] == 0:
                         neighbours_bis = get_neighbours(
-                            self.pixels_map, point, self.epsilon
+                            self.pixels_map, point, self.epsilon, distance_order
                         )
                         if len(neighbours_bis) >= self.minimum_points:
                             neighbours += neighbours_bis
