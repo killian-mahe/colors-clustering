@@ -1,6 +1,7 @@
 """
 Application related GUI.
 """
+from shutil import copyfile
 from copy import deepcopy
 import traceback
 import os
@@ -74,6 +75,7 @@ class AlgorithmWorker(QObject):
                 self.result_ready.emit(
                     algo.save(os.path.split(file_path)[0] + "edited.png")
                 )
+                self.stateChanged.emit("K-Means clustering completed.")
             elif algorithm == AlgorithmType.DBSCAN:
                 algo = DBScan(file_path)
                 self.stateChanged.emit("Applying DBScan algorithm")
@@ -87,6 +89,7 @@ class AlgorithmWorker(QObject):
                 self.result_ready.emit(
                     algo.save(os.path.split(file_path)[0] + "edited.png")
                 )
+                self.stateChanged.emit("DBScan clustering completed.")
         except Exception:
             self.stateChanged.emit("An error as occurred. Please retry.")
             print(traceback.format_exc())
@@ -390,6 +393,7 @@ class MainWindow(QMainWindow):
         self.selected_algorithm = None
         self.algorithm_thread = QThread()
         self.algorithm_worker = AlgorithmWorker()
+        self.apply_button = QPushButton("Apply")
         self.kmeans_options = KMeansOptions()
         self.dbscan_options = DBScanOptions()
         self.create_image_view()
@@ -437,13 +441,18 @@ class MainWindow(QMainWindow):
         -------
         None
         """
-        button_action = QAction(QIcon("bug.png"), "&Import", self)
-        button_action.setStatusTip("Import a new picture")
-        button_action.triggered.connect(self.open_file)
+        import_action = QAction("&Import", self)
+        import_action.triggered.connect(self.open_file)
+
+        self.export_action = QAction("&Export", self)
+        self.export_action.triggered.connect(self.export_file)
+        self.export_action.setEnabled(False)
 
         menu = self.menuBar()
-        file_menu = menu.addMenu("&File")
-        file_menu.addAction(button_action)
+        menu.addActions([
+            import_action,
+            self.export_action
+        ])
 
         self.setStatusBar(QStatusBar())
 
@@ -485,17 +494,8 @@ class MainWindow(QMainWindow):
         self.layout.addWidget(options_button, 1, 5)
         options_button.clicked.connect(self.open_settings_menu)
 
-        apply_button = QPushButton("Apply")
-        self.layout.addWidget(apply_button, 1, 6)
-        apply_button.clicked.connect(
-            lambda x: self.compute.emit(
-                self.selected_algorithm,
-                self.original_file_path,
-                self.kmeans_options
-                if self.selected_algorithm == AlgorithmType.KMEANS
-                else self.dbscan_options,
-            )
-        )
+        self.layout.addWidget(self.apply_button, 1, 6)
+        self.apply_button.clicked.connect(self.apply)
 
     def open_settings_menu(self):
         """
@@ -537,6 +537,7 @@ class MainWindow(QMainWindow):
         -------
         None
         """
+        self.apply_button.setEnabled(True)
         self.progress_bar.setValue(0)
         self.edited_file_path = edited_file_path
         pixmap = QPixmap(self.edited_file_path)
@@ -544,6 +545,27 @@ class MainWindow(QMainWindow):
             self.edited_scene.removeItem(self.edited_pixmap_item)
         self.edited_pixmap_item = QGraphicsPixmapItem(pixmap)
         self.edited_scene.addItem(self.edited_pixmap_item)
+        self.export_action.setEnabled(True)
+
+    def apply(self):
+        """
+        Apply the selected algorithm.
+
+        Returns
+        -------
+        None
+        """
+        self.compute.emit(
+            self.selected_algorithm,
+            self.original_file_path,
+            self.kmeans_options
+            if self.selected_algorithm == AlgorithmType.KMEANS
+            else self.dbscan_options,
+        )
+        if self.edited_pixmap_item:
+            self.edited_scene.removeItem(self.edited_pixmap_item)
+        self.apply_button.setEnabled(False)
+        self.export_action.setEnabled(False)
 
     def open_file(self):
         """
@@ -556,10 +578,19 @@ class MainWindow(QMainWindow):
         self.original_file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, "Open Image", "/", "Image Files (*.png *.jpg *.bmp)"
         )
-        pixmap = QPixmap(self.original_file_path)
-        if self.original_pixmap_item:
-            self.original_scene.removeItem(self.original_pixmap_item)
-        if self.edited_pixmap_item:
-            self.edited_scene.removeItem(self.edited_pixmap_item)
-        self.original_pixmap_item = QGraphicsPixmapItem(pixmap)
-        self.original_scene.addItem(self.original_pixmap_item)
+        if self.original_file_path:
+            self.edited_file_path = ""
+            pixmap = QPixmap(self.original_file_path)
+            if self.original_pixmap_item:
+                self.original_scene.removeItem(self.original_pixmap_item)
+            if self.edited_pixmap_item:
+                self.edited_scene.removeItem(self.edited_pixmap_item)
+            self.original_pixmap_item = QGraphicsPixmapItem(pixmap)
+            self.original_scene.addItem(self.original_pixmap_item)
+
+    def export_file(self):
+        if self.edited_file_path:
+            storage_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+                self, "Save image", "/", "Image Files (*.png *.jpg *.bmp)"
+            )
+            copyfile(self.edited_file_path, storage_path)

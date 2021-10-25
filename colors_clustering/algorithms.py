@@ -1,3 +1,4 @@
+import itertools
 from functools import partial
 import multiprocessing as mp
 import numpy as np
@@ -41,6 +42,10 @@ def get_neighbours(
     return list(zip(x, y))
 
 
+def get_neighbours_multiprocess(pixels_map: np.array, epsilon: float, distance_order: int, point: np.array):
+    return [(point[0], point[1]), get_neighbours(pixels_map, point, epsilon, distance_order)]
+
+
 def picture_to_pixelmap(picture_path: str) -> np.array:
     """
     Convert a image to a np.array of pixels with RGB components.
@@ -59,7 +64,7 @@ def picture_to_pixelmap(picture_path: str) -> np.array:
     # Remove alpha component if it's a PNG file.
     if picture_path[-3::] == "png":
         width, height, _ = pixel_map.shape
-        pixel_map.resize((width, height, 3))
+        return pixel_map[:, :, :3]
     return pixel_map
 
 
@@ -324,14 +329,16 @@ class DBScan(Algorithm, QObject):
             else:
                 cluster += 1
                 self.cluster_mapping[point[0], point[1]] = cluster
-                for point in neighbours:
+                while len(neighbours):
+                    point = neighbours.pop(0)
                     if self.cluster_mapping[point[0], point[1]] == 0:
                         neighbours_bis = get_neighbours(
                             self.pixels_map, point, self.epsilon, distance_order
                         )
                         if len(neighbours_bis) >= self.minimum_points:
-                            neighbours += neighbours_bis
-                    if self.cluster_mapping[point[0], point[1]] == 0:
+                            neighbours = list(set(neighbours_bis) | set(neighbours))
+                        else:
+                            self.cluster_mapping[point[0], point[1]] = NOISE_POINT
                         self.cluster_mapping[point[0], point[1]] = cluster
 
             to_label_x, to_label_y = np.where(self.cluster_mapping == 0)
